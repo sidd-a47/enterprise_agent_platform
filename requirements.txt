@@ -1,3 +1,5 @@
 groq
 streamlit
 streamlit
+
+tavily-python

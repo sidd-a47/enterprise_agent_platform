@@ -58,9 +58,11 @@ def decide_route(user_request: str) -> str:
                 "content": (
                     "Classify the user's message into exactly one word: "
                     "calculation if it involves math that needs computing, "
-                    "factual if it needs looked-up facts/data, or "
+                    "websearch if it needs current, real-time, or recent information "
+                    "(like news, prices, latest events, today's date, current status), "
+                    "factual if it needs general looked-up facts that do not change often, or "
                     "chat for general conversation. "
-                    "Reply with ONLY one word: calculation, factual, or chat."
+                    "Reply with ONLY one word: calculation, websearch, factual, or chat."
                 )
             },
             {"role": "user", "content": user_request}
@@ -80,6 +82,20 @@ def run_orchestrator(user_request: str):
     if "calculation" in route:
         result = TOOLS["calculator"](user_request.replace("what is", "").replace("?", "").strip())
         response_text = "The result is: " + str(result)
+    elif "websearch" in route:
+        search_results = TOOLS["web_search"](user_request)
+        summary_response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Summarize the following search results into a clear, concise answer to the user's question."
+                },
+                {"role": "user", "content": "Question: " + user_request + "\n\nSearch results:\n" + search_results}
+            ],
+            max_tokens=500
+        )
+        response_text = summary_response.choices[0].message.content
     elif "factual" in route:
         response_text = run_retrieval_agent(user_request)
     else:
