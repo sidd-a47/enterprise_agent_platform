@@ -1,8 +1,10 @@
-﻿from pathlib import Path
+﻿
+from pathlib import Path
 from groq import Groq
+import streamlit as st
 
 
-def find_env_file(start_path: Path) -> Path:
+def find_env_file(start_path: Path):
     current = start_path.resolve()
     for _ in range(6):
         candidate = current / ".env"
@@ -14,21 +16,14 @@ def find_env_file(start_path: Path) -> Path:
 
 env_path = find_env_file(Path(__file__).resolve().parent)
 
-if env_path is None:
-    raise ValueError("Could not find .env file in any parent directory!")
-
-import streamlit as st
-
 api_key = None
 
-# Try Streamlit Cloud secrets first
 try:
     api_key = st.secrets["GROQ_API_KEY"]
 except Exception:
     pass
 
-# Fall back to .env file for local development
-if not api_key and env_path and env_path.exists():
+if not api_key and env_path is not None and env_path.exists():
     with open(env_path, "r", encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
@@ -36,6 +31,8 @@ if not api_key and env_path and env_path.exists():
                 api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
                 break
 
+if not api_key:
+    raise ValueError("API key not found in Streamlit secrets or .env file!")
 
 client = Groq(api_key=api_key)
 
@@ -62,4 +59,4 @@ if __name__ == "__main__":
         if user_input.lower() == "exit":
             break
         reply = run_retrieval_agent(user_input)
-        print(f"Retrieval Agent: {reply}")
+        print("Retrieval Agent: " + reply)
