@@ -25,16 +25,24 @@ from agents.specialists.retrieval_agent.agent import run_retrieval_agent
 from tools.registry import TOOLS
 from governance.guardrails.checker import check_input_safety, check_output_safety
 
-api_key = None
-with open(env_path, "r", encoding="utf-8-sig") as f:
-    for line in f:
-        line = line.strip()
-        if line.startswith("GROQ_API_KEY"):
-            api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
-            break
+import streamlit as st
 
-if not api_key:
-    raise ValueError(f"API key not found in .env at: {env_path}")
+api_key = None
+
+# Try Streamlit Cloud secrets first
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+except Exception:
+    pass
+
+# Fall back to .env file for local development
+if not api_key and env_path and env_path.exists():
+    with open(env_path, "r", encoding="utf-8-sig") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("GROQ_API_KEY"):
+                api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                break
 
 client = Groq(api_key=api_key)
 
