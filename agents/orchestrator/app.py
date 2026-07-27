@@ -1,43 +1,111 @@
+
 import sys
 from pathlib import Path
 import streamlit as st
+from groq import Groq
+from gtts import gTTS
+from pypdf import PdfReader
+import io
 
-# Add project root to path
-project_root = Path(__file__).resolve().parents[2]
+project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
-from agents.orchestrator.agent import run_orchestrator
+from agents.orchestrator.agent import run_orchestrator, api_key
+from agents.specialists.document_agent.agent import answer_from_document
 
-st.set_page_config(page_title="Enterprise Agent Platform", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="Enterprise Agent Platform", layout="centered")
 
-st.title("🤖 Enterprise Agent Platform")
-st.caption("Multi-agent orchestration — routing, tools, guardrails")
+st.title("Enterprise Agent Platform")
+st.caption("Multi-agent orchestration - routing, tools, guardrails, voice, documents")
 
-# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
+if "document_text" not in st.session_state:
+    st.session_state.document_text = None
+
+if "document_name" not in st.session_state:
+    st.session_state.document_name = None
+
+st.sidebar.header("Document Upload")
+st.sidebar.write("Characters extracted: " + str(len(st.session_state.document_text)))
+uploaded_file = st.sidebar.file_uploader("Upload a PDF", type=["pdf"])
+
+if uploaded_file is not None:
+    if st.session_state.document_name != uploaded_file.name:
+        with st.spinner("Reading document..."):
+            reader = PdfReader(uploaded_file)
+            text = ""
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
+            st.session_state.document_text = text
+            st.session_state.document_name = uploaded_file.name
+        st.sidebar.success("Loaded: " + uploaded_file.name)
+    else:
+        st.sidebar.info("Currently loaded: " + uploaded_file.name)
+
+if st.session_state.document_text:
+    if st.sidebar.button("Clear document"):
+        st.session_state.document_text = None
+        st.session_state.document_name = None
+        st.rerun()
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        if msg["role"] == "assistant" and "audio" in msg:
+            st.audio(msg["audio"], format="audio/mp3")
 
-# Chat input
-user_input = st.chat_input("Ask me anything...")
+st.divider()
+st.subheader("Voice Input")
+audio_value = st.audio_input("Record your question")
+
+text_input = st.chat_input("Ask a question, or ask about your uploaded document...")
+
+user_input = None
+
+if audio_value is not None:
+    with st.spinner("Transcribing..."):
+        groq_client = Groq(api_key=api_key)
+        transcription = groq_client.audio.transcriptions.create(
+            file=("audio.wav", audio_value.read()),
+            model="whisper-large-v3-turbo",
+        )
+        user_input = transcription.text
+
+if text_input:
+    user_input = text_input
 
 if user_input:
-    # Show user message
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Get agent response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                reply = run_orchestrator(user_input)
+                if st.session_state.document_text:
+                    reply = answer_from_document(user_input, st.session_state.document_text)
+                else:
+                    reply = run_orchestrator(user_input)
             except Exception as e:
-                reply = f"⚠️ Error: {e}"
+                reply = "Error: " + str(e)
         st.markdown(reply)
 
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+        audio_bytes = None
+        try:
+            tts = gTTS(text=reply, lang="en")
+            audio_buffer = io.BytesIO()
+            tts.write_to_fp(audio_buffer)
+            audio_buffer.seek(0)
+            audio_bytes = audio_buffer.read()
+            st.audio(audio_bytes, format="audio/mp3")
+        except Exception:
+            pass
+
+    msg_entry = {"role": "assistant", "content": reply}
+    if audio_bytes:
+        msg_entry["audio"] = audio_bytes
+    st.session_state.messages.append(msg_entry)

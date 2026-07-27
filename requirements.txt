@@ -5,3 +5,5 @@ streamlit
 tavily-python
 
 gtts
+
+pypdf

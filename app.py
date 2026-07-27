@@ -3,20 +3,52 @@ from pathlib import Path
 import streamlit as st
 from groq import Groq
 from gtts import gTTS
+from pypdf import PdfReader
 import io
 
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
 from agents.orchestrator.agent import run_orchestrator, api_key
+from agents.specialists.document_agent.agent import answer_from_document
 
 st.set_page_config(page_title="Enterprise Agent Platform", layout="centered")
 
 st.title("Enterprise Agent Platform")
-st.caption("Multi-agent orchestration - routing, tools, guardrails, voice")
+st.caption("Multi-agent orchestration - routing, tools, guardrails, voice, documents")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if "document_text" not in st.session_state:
+    st.session_state.document_text = None
+
+if "document_name" not in st.session_state:
+    st.session_state.document_name = None
+
+st.sidebar.header("Document Upload")
+uploaded_file = st.sidebar.file_uploader("Upload a PDF", type=["pdf"])
+
+if uploaded_file is not None:
+    if st.session_state.document_name != uploaded_file.name:
+        with st.spinner("Reading document..."):
+            reader = PdfReader(uploaded_file)
+            text = ""
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
+            st.session_state.document_text = text
+            st.session_state.document_name = uploaded_file.name
+        st.sidebar.success("Loaded: " + uploaded_file.name)
+    else:
+        st.sidebar.info("Currently loaded: " + uploaded_file.name)
+
+if st.session_state.document_text:
+    if st.sidebar.button("Clear document"):
+        st.session_state.document_text = None
+        st.session_state.document_name = None
+        st.rerun()
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -28,7 +60,7 @@ st.divider()
 st.subheader("Voice Input")
 audio_value = st.audio_input("Record your question")
 
-text_input = st.chat_input("Or type your question...")
+text_input = st.chat_input("Ask a question, or ask about your uploaded document...")
 
 user_input = None
 
@@ -52,7 +84,10 @@ if user_input:
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                reply = run_orchestrator(user_input)
+                if st.session_state.document_text:
+                    reply = answer_from_document(user_input, st.session_state.document_text)
+                else:
+                    reply = run_orchestrator(user_input)
             except Exception as e:
                 reply = "Error: " + str(e)
         st.markdown(reply)
