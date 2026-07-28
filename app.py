@@ -14,6 +14,7 @@ sys.path.insert(0, str(project_root))
 from agents.orchestrator.agent import run_orchestrator, api_key, PERSONAS
 from agents.specialists.document_agent.agent import answer_from_document
 from agents.specialists.image_agent.agent import analyze_image
+from agents.debate_agent import get_debate_reply, DEBATE_PERSONAS
 from analytics import log_usage, get_usage_data
 
 st.set_page_config(page_title="Enterprise Agent Platform", layout="centered")
@@ -35,6 +36,10 @@ if "image_name" not in st.session_state:
     st.session_state.image_name = None
 if "persona" not in st.session_state:
     st.session_state.persona = "Default"
+if "debate_history" not in st.session_state:
+    st.session_state.debate_history = []
+if "debate_running" not in st.session_state:
+    st.session_state.debate_running = False
 
 
 def create_new_chat():
@@ -54,7 +59,7 @@ def delete_chat(chat_id):
             st.session_state.active_conversation = list(st.session_state.conversations.keys())[0]
 
 
-page = st.sidebar.radio("Navigation", ["Chat", "Analytics"])
+page = st.sidebar.radio("Navigation", ["Chat", "Analytics", "Debate"])
 
 st.sidebar.divider()
 st.sidebar.header("Agent Persona")
@@ -134,6 +139,41 @@ if page == "Analytics":
         st.bar_chart(counts)
         st.subheader("Recent activity")
         st.dataframe(df.tail(20)[["timestamp", "agent_type", "route"]])
+
+elif page == "Debate":
+    st.title("Agent Debate")
+    st.caption("Watch two AI personas debate a topic")
+
+    col1, col2 = st.columns(2)
+    speaker_a = col1.selectbox("Speaker A", list(DEBATE_PERSONAS.keys()), index=0)
+    speaker_b = col2.selectbox("Speaker B", list(DEBATE_PERSONAS.keys()), index=1)
+
+    topic = st.text_input("Debate topic", placeholder="e.g. Should AI replace teachers?")
+    rounds = st.slider("Number of rounds", 1, 5, 3)
+
+    if st.button("Start Debate", disabled=not topic):
+        st.session_state.debate_history = []
+        st.session_state.debate_running = True
+
+        placeholder = st.container()
+
+        for i in range(rounds):
+            reply_a = get_debate_reply(speaker_a, topic, st.session_state.debate_history)
+            st.session_state.debate_history.append({"speaker": speaker_a, "text": reply_a})
+            with placeholder:
+                with st.chat_message("assistant"):
+                    st.markdown("**" + speaker_a + ":** " + reply_a)
+
+            reply_b = get_debate_reply(speaker_b, topic, st.session_state.debate_history)
+            st.session_state.debate_history.append({"speaker": speaker_b, "text": reply_b})
+            with placeholder:
+                with st.chat_message("user"):
+                    st.markdown("**" + speaker_b + ":** " + reply_b)
+
+        st.session_state.debate_running = False
+
+    if st.session_state.debate_history and not st.button:
+        pass
 
 else:
     active_id = st.session_state.active_conversation
