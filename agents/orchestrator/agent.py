@@ -76,10 +76,12 @@ def decide_route(user_request):
                 "role": "system",
                 "content": (
                     "Classify the user's message into exactly one word: "
-                    "calculation if it involves math, websearch if it needs "
-                    "current or recent information, factual if it needs "
-                    "general looked-up facts, or chat for general conversation. "
-                    "Reply with ONLY one word: calculation, websearch, factual, or chat."
+                    "calculation if it involves math, "
+                    "price if it asks about a stock or cryptocurrency price, "
+                    "websearch if it needs current or recent information, "
+                    "factual if it needs general looked-up facts, or "
+                    "chat for general conversation. "
+                    "Reply with ONLY one word: calculation, price, websearch, factual, or chat."
                 )
             },
             {"role": "user", "content": user_request}
@@ -100,6 +102,8 @@ def run_orchestrator(user_request, persona="Default"):
     if "calculation" in route:
         result = TOOLS["calculator"](user_request.replace("what is", "").replace("?", "").strip())
         response_text = "The result is: " + str(result)
+    elif "price" in route:
+        response_text = TOOLS["price_checker"](user_request)
     elif "websearch" in route:
         search_results = TOOLS["web_search"](user_request)
         resp = client.chat.completions.create(

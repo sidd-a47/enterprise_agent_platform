@@ -9,3 +9,5 @@ gtts
 pypdf
 
 pandas
+
+requests
