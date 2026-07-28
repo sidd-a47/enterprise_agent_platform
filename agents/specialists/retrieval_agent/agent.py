@@ -1,5 +1,4 @@
-
-from pathlib import Path
+﻿from pathlib import Path
 from groq import Groq
 import streamlit as st
 
@@ -43,7 +42,13 @@ def run_retrieval_agent(query: str):
         messages=[
             {
                 "role": "system",
-                "content": "You are a retrieval specialist. Answer the user's question factually and concisely."
+                "content": (
+                    "You are a retrieval specialist. Answer the user's question "
+                    "factually and concisely. Reply in the same language the "
+                    "user wrote their question in - if they write in Marathi, "
+                    "reply in Marathi; if Hindi, reply in Hindi; if English, "
+                    "reply in English."
+                )
             },
             {"role": "user", "content": query}
         ],

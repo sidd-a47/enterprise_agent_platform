@@ -65,19 +65,20 @@ PERSONAS = {
     ),
 }
 
+LANGUAGE_INSTRUCTION = " IMPORTANT: Always reply in the same language the user wrote their message in."
 
-def decide_route(user_request: str) -> str:
-    response = client.chat.completions.create(
+
+def decide_route(user_request):
+    resp = client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
             {
                 "role": "system",
                 "content": (
                     "Classify the user's message into exactly one word: "
-                    "calculation if it involves math that needs computing, "
-                    "websearch if it needs current, real-time, or recent information, "
-                    "factual if it needs general looked-up facts, or "
-                    "chat for general conversation. "
+                    "calculation if it involves math, websearch if it needs "
+                    "current or recent information, factual if it needs "
+                    "general looked-up facts, or chat for general conversation. "
                     "Reply with ONLY one word: calculation, websearch, factual, or chat."
                 )
             },
@@ -85,10 +86,10 @@ def decide_route(user_request: str) -> str:
         ],
         max_tokens=10
     )
-    return response.choices[0].message.content.strip().lower()
+    return resp.choices[0].message.content.strip().lower()
 
 
-def run_orchestrator(user_request: str, persona: str = "Default"):
+def run_orchestrator(user_request, persona="Default"):
     is_safe, reason = check_input_safety(user_request)
     if not is_safe:
         return "BLOCKED: " + reason
@@ -101,27 +102,27 @@ def run_orchestrator(user_request: str, persona: str = "Default"):
         response_text = "The result is: " + str(result)
     elif "websearch" in route:
         search_results = TOOLS["web_search"](user_request)
-        summary_response = client.chat.completions.create(
+        resp = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
-                {"role": "system", "content": persona_prompt + " Summarize search results into a clear answer."},
+                {"role": "system", "content": persona_prompt + " Summarize search results." + LANGUAGE_INSTRUCTION},
                 {"role": "user", "content": "Question: " + user_request + "\n\nSearch results:\n" + search_results}
             ],
             max_tokens=500
         )
-        response_text = summary_response.choices[0].message.content
+        response_text = resp.choices[0].message.content
     elif "factual" in route:
         response_text = run_retrieval_agent(user_request)
     else:
-        response = client.chat.completions.create(
+        resp = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
-                {"role": "system", "content": persona_prompt},
+                {"role": "system", "content": persona_prompt + LANGUAGE_INSTRUCTION},
                 {"role": "user", "content": user_request}
             ],
             max_tokens=500
         )
-        response_text = response.choices[0].message.content
+        response_text = resp.choices[0].message.content
 
     output_safe, output_reason = check_output_safety(response_text)
     if not output_safe:
