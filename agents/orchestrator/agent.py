@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 from pathlib import Path
 from groq import Groq
@@ -49,6 +49,23 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 
+PERSONAS = {
+    "Default": "You are a helpful assistant.",
+    "Formal Business Advisor": (
+        "You are a formal, professional business advisor. Respond with "
+        "precise, polished, corporate language. Avoid slang or casual tone."
+    ),
+    "Friendly Teacher": (
+        "You are a warm, patient teacher who explains things simply, "
+        "using examples and encouragement. Keep a friendly, supportive tone."
+    ),
+    "Sarcastic Comedian": (
+        "You are a witty, sarcastic comedian. Answer questions accurately "
+        "but with humor, dry wit, and playful sarcasm."
+    ),
+}
+
+
 def decide_route(user_request: str) -> str:
     response = client.chat.completions.create(
         model="openai/gpt-oss-120b",
@@ -58,9 +75,8 @@ def decide_route(user_request: str) -> str:
                 "content": (
                     "Classify the user's message into exactly one word: "
                     "calculation if it involves math that needs computing, "
-                    "websearch if it needs current, real-time, or recent information "
-                    "(like news, prices, latest events, today's date, current status), "
-                    "factual if it needs general looked-up facts that do not change often, or "
+                    "websearch if it needs current, real-time, or recent information, "
+                    "factual if it needs general looked-up facts, or "
                     "chat for general conversation. "
                     "Reply with ONLY one word: calculation, websearch, factual, or chat."
                 )
@@ -72,12 +88,13 @@ def decide_route(user_request: str) -> str:
     return response.choices[0].message.content.strip().lower()
 
 
-def run_orchestrator(user_request: str):
+def run_orchestrator(user_request: str, persona: str = "Default"):
     is_safe, reason = check_input_safety(user_request)
     if not is_safe:
         return "BLOCKED: " + reason
 
     route = decide_route(user_request)
+    persona_prompt = PERSONAS.get(persona, PERSONAS["Default"])
 
     if "calculation" in route:
         result = TOOLS["calculator"](user_request.replace("what is", "").replace("?", "").strip())
@@ -87,10 +104,7 @@ def run_orchestrator(user_request: str):
         summary_response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
-                {
-                    "role": "system",
-                    "content": "Summarize the following search results into a clear, concise answer to the user's question."
-                },
+                {"role": "system", "content": persona_prompt + " Summarize search results into a clear answer."},
                 {"role": "user", "content": "Question: " + user_request + "\n\nSearch results:\n" + search_results}
             ],
             max_tokens=500
@@ -101,7 +115,10 @@ def run_orchestrator(user_request: str):
     else:
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
-            messages=[{"role": "user", "content": user_request}],
+            messages=[
+                {"role": "system", "content": persona_prompt},
+                {"role": "user", "content": user_request}
+            ],
             max_tokens=500
         )
         response_text = response.choices[0].message.content

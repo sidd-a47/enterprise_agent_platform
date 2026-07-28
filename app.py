@@ -11,7 +11,7 @@ import pandas as pd
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
-from agents.orchestrator.agent import run_orchestrator, api_key
+from agents.orchestrator.agent import run_orchestrator, api_key, PERSONAS
 from agents.specialists.document_agent.agent import answer_from_document
 from agents.specialists.image_agent.agent import analyze_image
 from analytics import log_usage, get_usage_data
@@ -33,6 +33,8 @@ if "image_bytes" not in st.session_state:
     st.session_state.image_bytes = None
 if "image_name" not in st.session_state:
     st.session_state.image_name = None
+if "persona" not in st.session_state:
+    st.session_state.persona = "Default"
 
 
 def create_new_chat():
@@ -53,6 +55,14 @@ def delete_chat(chat_id):
 
 
 page = st.sidebar.radio("Navigation", ["Chat", "Analytics"])
+
+st.sidebar.divider()
+st.sidebar.header("Agent Persona")
+st.session_state.persona = st.sidebar.selectbox(
+    "Choose how the agent talks",
+    list(PERSONAS.keys()),
+    index=list(PERSONAS.keys()).index(st.session_state.persona)
+)
 
 st.sidebar.divider()
 st.sidebar.header("Conversations")
@@ -119,11 +129,9 @@ if page == "Analytics":
     else:
         df = pd.DataFrame(data)
         st.subheader("Total requests: " + str(len(df)))
-
         st.subheader("Requests by agent type")
         counts = df["agent_type"].value_counts()
         st.bar_chart(counts)
-
         st.subheader("Recent activity")
         st.dataframe(df.tail(20)[["timestamp", "agent_type", "route"]])
 
@@ -132,7 +140,7 @@ else:
     active_chat = st.session_state.conversations[active_id]
 
     st.title("Enterprise Agent Platform")
-    st.caption("Multi-agent orchestration - routing, tools, guardrails, voice, documents, images")
+    st.caption("Multi-agent orchestration - routing, tools, guardrails, voice, documents, images, personas")
 
     for msg in active_chat["messages"]:
         with st.chat_message(msg["role"]):
@@ -179,7 +187,7 @@ else:
                         reply = answer_from_document(user_input, st.session_state.document_text)
                         log_usage("document", "document_agent")
                     else:
-                        reply = run_orchestrator(user_input)
+                        reply = run_orchestrator(user_input, st.session_state.persona)
                         log_usage("orchestrator", "orchestrator")
                 except Exception as e:
                     reply = "Error: " + str(e)
