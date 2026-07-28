@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 from groq import Groq
 import streamlit as st
@@ -36,27 +37,27 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 
-def answer_from_document(question: str, document_text: str) -> str:
+def analyze_image(question: str, image_bytes: bytes) -> str:
     """
-    Answers a question using only the content of the provided document.
+    Analyzes an image and answers a question about it using a vision model.
     """
-    max_chars = 12000
-    truncated_text = document_text[:max_chars]
+    base64_image = base64.b64encode(image_bytes).decode("utf-8")
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model="qwen/qwen3.6-27b",
         messages=[
             {
-                "role": "system",
-                "content": (
-                    "You are a document analysis specialist. Answer the "
-                    "user's question using ONLY the information in the "
-                    "document below. If the answer is not in the document, "
-                    "say so clearly instead of guessing.\n\n"
-                    "DOCUMENT:\n" + truncated_text
-                )
-            },
-            {"role": "user", "content": question}
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": question},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/jpeg;base64," + base64_image
+                        }
+                    }
+                ]
+            }
         ],
         max_tokens=600
     )

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 from pathlib import Path
 from groq import Groq
@@ -51,7 +51,7 @@ client = Groq(api_key=api_key)
 
 def decide_route(user_request: str) -> str:
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {
                 "role": "system",
@@ -85,7 +85,7 @@ def run_orchestrator(user_request: str):
     elif "websearch" in route:
         search_results = TOOLS["web_search"](user_request)
         summary_response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",
@@ -100,7 +100,7 @@ def run_orchestrator(user_request: str):
         response_text = run_retrieval_agent(user_request)
     else:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": user_request}],
             max_tokens=500
         )

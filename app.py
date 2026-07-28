@@ -12,10 +12,10 @@ sys.path.insert(0, str(project_root))
 
 from agents.orchestrator.agent import run_orchestrator, api_key
 from agents.specialists.document_agent.agent import answer_from_document
+from agents.specialists.image_agent.agent import analyze_image
 
 st.set_page_config(page_title="Enterprise Agent Platform", layout="centered")
 
-# ---- Session management ----
 if "conversations" not in st.session_state:
     first_id = str(uuid.uuid4())
     st.session_state.conversations = {
@@ -28,6 +28,12 @@ if "document_text" not in st.session_state:
 
 if "document_name" not in st.session_state:
     st.session_state.document_name = None
+
+if "image_bytes" not in st.session_state:
+    st.session_state.image_bytes = None
+
+if "image_name" not in st.session_state:
+    st.session_state.image_name = None
 
 
 def create_new_chat():
@@ -47,7 +53,6 @@ def delete_chat(chat_id):
             st.session_state.active_conversation = list(st.session_state.conversations.keys())[0]
 
 
-# ---- Sidebar: conversation list ----
 st.sidebar.header("Conversations")
 
 if st.sidebar.button("+ New Chat", use_container_width=True):
@@ -59,7 +64,7 @@ st.sidebar.divider()
 for chat_id, chat_data in list(st.session_state.conversations.items()):
     col1, col2 = st.sidebar.columns([4, 1])
     is_active = chat_id == st.session_state.active_conversation
-    label = ("➤ " if is_active else "") + chat_data["name"]
+    label = ("> " if is_active else "") + chat_data["name"]
     if col1.button(label, key="switch_" + chat_id, use_container_width=True):
         switch_chat(chat_id)
         st.rerun()
@@ -69,7 +74,6 @@ for chat_id, chat_data in list(st.session_state.conversations.items()):
 
 st.sidebar.divider()
 
-# ---- Sidebar: document upload ----
 st.sidebar.header("Document Upload")
 uploaded_file = st.sidebar.file_uploader("Upload a PDF", type=["pdf"])
 
@@ -85,9 +89,6 @@ if uploaded_file is not None:
             st.session_state.document_text = text
             st.session_state.document_name = uploaded_file.name
         st.sidebar.success("Loaded: " + uploaded_file.name)
-        st.sidebar.write("Characters extracted: " + str(len(st.session_state.document_text)))
-    else:
-        st.sidebar.info("Currently loaded: " + uploaded_file.name)
 
 if st.session_state.document_text:
     if st.sidebar.button("Clear document"):
@@ -95,12 +96,28 @@ if st.session_state.document_text:
         st.session_state.document_name = None
         st.rerun()
 
-# ---- Main chat area ----
+st.sidebar.divider()
+
+st.sidebar.header("Image Upload")
+uploaded_image = st.sidebar.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+
+if uploaded_image is not None:
+    if st.session_state.image_name != uploaded_image.name:
+        st.session_state.image_bytes = uploaded_image.read()
+        st.session_state.image_name = uploaded_image.name
+    st.sidebar.image(st.session_state.image_bytes, caption=uploaded_image.name, use_container_width=True)
+
+if st.session_state.image_bytes:
+    if st.sidebar.button("Clear image"):
+        st.session_state.image_bytes = None
+        st.session_state.image_name = None
+        st.rerun()
+
 active_id = st.session_state.active_conversation
 active_chat = st.session_state.conversations[active_id]
 
 st.title("Enterprise Agent Platform")
-st.caption("Multi-agent orchestration - routing, tools, guardrails, voice, documents")
+st.caption("Multi-agent orchestration - routing, tools, guardrails, voice, documents, images")
 
 for msg in active_chat["messages"]:
     with st.chat_message(msg["role"]):
@@ -112,7 +129,7 @@ st.divider()
 st.subheader("Voice Input")
 audio_value = st.audio_input("Record your question")
 
-text_input = st.chat_input("Ask a question, or ask about your uploaded document...")
+text_input = st.chat_input("Ask a question, or ask about your uploaded document/image...")
 
 user_input = None
 
@@ -140,7 +157,9 @@ if user_input:
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                if st.session_state.document_text:
+                if st.session_state.image_bytes:
+                    reply = analyze_image(user_input, st.session_state.image_bytes)
+                elif st.session_state.document_text:
                     reply = answer_from_document(user_input, st.session_state.document_text)
                 else:
                     reply = run_orchestrator(user_input)
